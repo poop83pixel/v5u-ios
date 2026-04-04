@@ -29,7 +29,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-              # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
+      # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
       - name: Add Metal framework and shaders to Xcode project
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
@@ -124,27 +124,49 @@ jobs:
           echo ""
           echo "Finding RSDKv5 target's sources phase..."
           
-          # Extract the RSDKv5 target's buildPhases array to find its sources phase ID
-          RSDK_TARGET_ID=$(grep -A 5 "RSDKv5 \*/" "$PROJECT_FILE" | grep "isa = PBXNativeTarget" -B 2 | head -1 | awk '{print $1}')
+          # Extract the RSDKv5 target ID - look for the native target
+          RSDK_TARGET_ID=$(grep -F "PBXNativeTarget" "$PROJECT_FILE" | grep -F "RSDKv5" | head -1 | awk '{print $1}')
           echo "  RSDKv5 target ID: $RSDK_TARGET_ID"
           
+          if [ -z "$RSDK_TARGET_ID" ]; then
+            echo "  Could not find via PBXNativeTarget, searching differently..."
+            # Alternative: search for the target by name comment
+            RSDK_TARGET_ID=$(awk '/\/\* RSDKv5 \*\/ = \{/,/^[ \t]*\};/ { if (/isa = PBXNativeTarget/) { print prev } } { prev=$1 }' "$PROJECT_FILE" | head -1)
+            echo "  RSDKv5 target ID (alt): $RSDK_TARGET_ID"
+          fi
+          
+          if [ -z "$RSDK_TARGET_ID" ]; then
+            echo "ERROR: Could not find RSDKv5 target ID"
+            echo "Searching for all native targets:"
+            grep "isa = PBXNativeTarget" "$PROJECT_FILE" | head -5
+            exit 1
+          fi
+          
           # Find the sources build phase ID for this target
-          SOURCES_PHASE_ID=$(grep -A 20 "$RSDK_TARGET_ID /\* RSDKv5 \*/ = {" "$PROJECT_FILE" | grep "PBXSourcesBuildPhase" | awk '{print $1}')
+          SOURCES_PHASE_ID=$(awk "/$RSDK_TARGET_ID/,/};/" "$PROJECT_FILE" | grep "PBXSourcesBuildPhase" | head -1 | awk '{print $1}')
           echo "  Sources phase ID: $SOURCES_PHASE_ID"
           
           if [ -z "$SOURCES_PHASE_ID" ]; then
             echo "ERROR: Could not find RSDKv5 sources build phase"
+            echo "Target block:"
+            awk "/$RSDK_TARGET_ID/,/};" "$PROJECT_FILE" | head -30
             exit 1
           fi
           
           # Add our files to this specific sources phase
-          for BUILD_ID in "${BUILD_IDS[@]}"; do
+          echo ""
+          echo "Adding to sources phase..."
+          for i in "${!BUILD_IDS[@]}"; do
+            BUILD_ID="${BUILD_IDS[$i]}"
+            FILE_NAME=$(basename "${FILES_TO_ADD[$i]}")
+            echo "  Adding $FILE_NAME ($BUILD_ID)"
+            
             # Find the line with this sources phase and its files array
-            awk -v phase_id="$SOURCES_PHASE_ID" -v build_id="$BUILD_ID" '
-              $0 ~ phase_id " /\\* Sources \\*/ = {" { in_phase=1 }
+            awk -v phase_id="$SOURCES_PHASE_ID" -v build_id="$BUILD_ID" -v file_name="$FILE_NAME" '
+              $1 == phase_id && /Sources/ { in_phase=1 }
               in_phase && /files = \(/ { in_files=1; print; next }
               in_files && !added && /\);/ {
-                print "\t\t\t\t" build_id " /* in Sources */,"
+                print "\t\t\t\t" build_id " /* " file_name " in Sources */,"
                 added=1
               }
               { print }
@@ -154,9 +176,9 @@ jobs:
           
           # Add Metal.framework
           echo ""
-          echo "  Adding Metal.framework"
-          echo "    Framework ID: $METAL_FW_ID"
-          echo "    Build ID:     $METAL_BUILD_ID"
+          echo "Adding Metal.framework..."
+          echo "  Framework ID: $METAL_FW_ID"
+          echo "  Build ID:     $METAL_BUILD_ID"
           
           sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
           \		'"$METAL_FW_ID"' /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
@@ -167,11 +189,11 @@ jobs:
           ' "$PROJECT_FILE"
           
           # Find RSDKv5's frameworks phase
-          FRAMEWORKS_PHASE_ID=$(grep -A 20 "$RSDK_TARGET_ID /\* RSDKv5 \*/ = {" "$PROJECT_FILE" | grep "PBXFrameworksBuildPhase" | awk '{print $1}')
+          FRAMEWORKS_PHASE_ID=$(awk "/$RSDK_TARGET_ID/,/};/" "$PROJECT_FILE" | grep "PBXFrameworksBuildPhase" | head -1 | awk '{print $1}')
           echo "  Frameworks phase ID: $FRAMEWORKS_PHASE_ID"
           
           awk -v phase_id="$FRAMEWORKS_PHASE_ID" -v metal_id="$METAL_BUILD_ID" '
-            $0 ~ phase_id " /\\* Frameworks \\*/ = {" { in_phase=1 }
+            $1 == phase_id && /Frameworks/ { in_phase=1 }
             in_phase && /files = \(/ { in_files=1; print; next }
             in_files && !added && /\);/ {
               print "\t\t\t\t" metal_id " /* Metal.framework in Frameworks */,"
@@ -184,12 +206,14 @@ jobs:
           echo ""
           echo "Verifying additions..."
           
-          # Check if our files appear in the project
-          for BUILD_ID in "${BUILD_IDS[@]}"; do
+          # Check if our files appear in the sources phase
+          for i in "${!BUILD_IDS[@]}"; do
+            BUILD_ID="${BUILD_IDS[$i]}"
+            FILE_NAME=$(basename "${FILES_TO_ADD[$i]}")
             if grep -q "$BUILD_ID" "$PROJECT_FILE"; then
-              echo "  ✓ Build entry $BUILD_ID present"
+              echo "  ✓ $FILE_NAME ($BUILD_ID) added to project"
             else
-              echo "  ✗ Build entry $BUILD_ID MISSING"
+              echo "  ✗ $FILE_NAME ($BUILD_ID) MISSING from project"
             fi
           done
           
@@ -199,8 +223,7 @@ jobs:
           
           echo ""
           echo "═══════════════════════════════════════════════════════"
-          echo "✓ Added ${#FILES_TO_ADD[@]} Metal source files"
-          echo "✓ Added Metal.framework"
+          echo "✓ Metal support configuration complete"
           echo "═══════════════════════════════════════════════════════"
 
           
