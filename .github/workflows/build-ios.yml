@@ -44,7 +44,8 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
-            | xcpretty || true   # xcpretty is pre-installed on macos-14 runners
+            GCC_PREPROCESSOR_DEFINITIONS='$(inherited) RETRO_REVISION=3' \
+            | xcpretty || true
 
       # ── 4. Package as IPA ────────────────────────────────────────────────────
       # Because the build is unsigned we skip xcodebuild -exportArchive and
