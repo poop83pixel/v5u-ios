@@ -39,6 +39,7 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath "${{ runner.temp }}/RSDKv5U.xcarchive" \
             RETRO_REVISION=3 \
+            INFOPLIST_FILE="" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
