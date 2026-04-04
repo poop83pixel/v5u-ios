@@ -2,6 +2,8 @@
 // Compiled as Objective-C++ (.mm). All engine-specific macros are passed in
 // as parameters so this file has zero dependencies on engine headers.
 
+#include <TargetConditionals.h> // MUST be before the #if check
+
 #if TARGET_OS_IPHONE
 
 #import <Foundation/Foundation.h>
@@ -23,35 +25,35 @@ struct MetalVertex { float pos[3]; uint32_t color; float tex[2]; };
 // ---------------------------------------------------------------------------
 static const MetalVertex kBaseVerts[60] = {
     // 1 Screen (0-5)
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{−1,−1,1},0xFFFFFFFF,{0,1}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{-1,-1,1},0xFFFFFFFF,{0,1}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
     // 2P Bordered top (6-11)
-    {{+.5f,0,1},0xFFFFFFFF,{1,1}},{{+.5f,+1,1},0xFFFFFFFF,{1,0}},{{−.5f,+1,1},0xFFFFFFFF,{0,0}},
-    {{+.5f,0,1},0xFFFFFFFF,{1,1}},{{−.5f,0,1},0xFFFFFFFF,{0,1}},{{−.5f,+1,1},0xFFFFFFFF,{0,0}},
+    {{+.5f,0,1},0xFFFFFFFF,{1,1}},{{+.5f,+1,1},0xFFFFFFFF,{1,0}},{{-.5f,+1,1},0xFFFFFFFF,{0,0}},
+    {{+.5f,0,1},0xFFFFFFFF,{1,1}},{{-.5f,0,1},0xFFFFFFFF,{0,1}},{{-.5f,+1,1},0xFFFFFFFF,{0,0}},
     // 2P Bordered bottom (12-17)
-    {{+.5f,−1,1},0xFFFFFFFF,{1,1}},{{+.5f,0,1},0xFFFFFFFF,{1,0}},{{−.5f,0,1},0xFFFFFFFF,{0,0}},
-    {{+.5f,−1,1},0xFFFFFFFF,{1,1}},{{−.5f,−1,1},0xFFFFFFFF,{0,1}},{{−.5f,0,1},0xFFFFFFFF,{0,0}},
+    {{+.5f,-1,1},0xFFFFFFFF,{1,1}},{{+.5f,0,1},0xFFFFFFFF,{1,0}},{{-.5f,0,1},0xFFFFFFFF,{0,0}},
+    {{+.5f,-1,1},0xFFFFFFFF,{1,1}},{{-.5f,-1,1},0xFFFFFFFF,{0,1}},{{-.5f,0,1},0xFFFFFFFF,{0,0}},
     // 2P Stretched top (18-23)
-    {{+1,0,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
-    {{+1,0,1},0xFFFFFFFF,{1,1}},{{−1,0,1},0xFFFFFFFF,{0,1}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,0,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,0,1},0xFFFFFFFF,{1,1}},{{-1,0,1},0xFFFFFFFF,{0,1}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
     // 2P Stretched bottom (24-29)
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{+1,0,1},0xFFFFFFFF,{1,0}},{{−1,0,1},0xFFFFFFFF,{0,0}},
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{−1,−1,1},0xFFFFFFFF,{0,1}},{{−1,0,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{+1,0,1},0xFFFFFFFF,{1,0}},{{-1,0,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{-1,-1,1},0xFFFFFFFF,{0,1}},{{-1,0,1},0xFFFFFFFF,{0,0}},
     // 4P top-left (30-35)
-    {{0,0,1},0xFFFFFFFF,{1,1}},{{0,+1,1},0xFFFFFFFF,{1,0}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
-    {{0,0,1},0xFFFFFFFF,{1,1}},{{−1,0,1},0xFFFFFFFF,{0,1}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
+    {{0,0,1},0xFFFFFFFF,{1,1}},{{0,+1,1},0xFFFFFFFF,{1,0}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
+    {{0,0,1},0xFFFFFFFF,{1,1}},{{-1,0,1},0xFFFFFFFF,{0,1}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
     // 4P top-right (36-41)
     {{+1,0,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{0,+1,1},0xFFFFFFFF,{0,0}},
     {{+1,0,1},0xFFFFFFFF,{1,1}},{{0,0,1},0xFFFFFFFF,{0,1}},{{0,+1,1},0xFFFFFFFF,{0,0}},
     // 4P bottom-right (42-47)
-    {{0,−1,1},0xFFFFFFFF,{1,1}},{{0,0,1},0xFFFFFFFF,{1,0}},{{−1,0,1},0xFFFFFFFF,{0,0}},
-    {{0,−1,1},0xFFFFFFFF,{1,1}},{{−1,−1,1},0xFFFFFFFF,{0,1}},{{−1,0,1},0xFFFFFFFF,{0,0}},
+    {{0,-1,1},0xFFFFFFFF,{1,1}},{{0,0,1},0xFFFFFFFF,{1,0}},{{-1,0,1},0xFFFFFFFF,{0,0}},
+    {{0,-1,1},0xFFFFFFFF,{1,1}},{{-1,-1,1},0xFFFFFFFF,{0,1}},{{-1,0,1},0xFFFFFFFF,{0,0}},
     // 4P bottom-left (48-53)
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{+1,0,1},0xFFFFFFFF,{1,0}},{{0,0,1},0xFFFFFFFF,{0,0}},
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{0,−1,1},0xFFFFFFFF,{0,1}},{{0,0,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{+1,0,1},0xFFFFFFFF,{1,0}},{{0,0,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{0,-1,1},0xFFFFFFFF,{0,1}},{{0,0,1},0xFFFFFFFF,{0,0}},
     // Image/Video fullscreen (54-59)
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
-    {{+1,−1,1},0xFFFFFFFF,{1,1}},{{−1,−1,1},0xFFFFFFFF,{0,1}},{{−1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{+1,+1,1},0xFFFFFFFF,{1,0}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
+    {{+1,-1,1},0xFFFFFFFF,{1,1}},{{-1,-1,1},0xFFFFFFFF,{0,1}},{{-1,+1,1},0xFFFFFFFF,{0,0}},
 };
 
 struct ShaderUniforms { float pixelSize[2], textureSize[2], viewSize[2], screenDim, _pad; };
@@ -85,6 +87,9 @@ static void PatchUVs(MetalVertex *v, int count, float uMax, float vMax) {
         if (v[i].tex[1]) v[i].tex[1] = vMax;
     }
 }
+
+// Ensure C-linkage so C++ classes like RSDK::RenderDevice can find these symbols
+extern "C" {
 
 bool MetalShaders_Init(void *sdlRenderer,
                        float texW, float texH,
@@ -207,5 +212,7 @@ void MetalShaders_FlipScreen(void *sdlRenderer, int shaderID, bool linear,
         [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:(NSUInteger)draws[i].startVert vertexCount:6];
     }
 }
+
+} // extern "C"
 
 #endif // TARGET_OS_IPHONE
