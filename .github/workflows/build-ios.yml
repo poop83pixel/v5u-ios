@@ -37,172 +37,145 @@ jobs:
           # Backup original
           cp "$PROJECT_FILE" "$PROJECT_FILE.backup"
           
-          echo "Adding Metal support to Xcode project..."
+          echo "Current state of Metal-related entries:"
+          grep -c "SDL2MetalShaders" "$PROJECT_FILE" || echo "0 SDL2MetalShaders entries"
+          grep -c "SDL_render_metal" "$PROJECT_FILE" || echo "0 SDL_render_metal entries"
+          grep -c "Metal.framework" "$PROJECT_FILE" || echo "0 Metal.framework entries"
           
-          # Files to add
+          # ── Step 1: Remove ALL previous patch attempts ───────────────────────
+          echo ""
+          echo "Removing any previous patch attempts..."
+          
+          # We'll rebuild from the git-clean version of the project file
+          git checkout -- "$PROJECT_FILE" 2>/dev/null || true
+          
+          # Verify clean state
+          echo "After git checkout:"
+          grep -c "SDL2MetalShaders" "$PROJECT_FILE" 2>/dev/null && echo " SDL2MetalShaders entries found" || echo " 0 SDL2MetalShaders entries"
+          grep -c "SDL_render_metal" "$PROJECT_FILE" 2>/dev/null && echo " SDL_render_metal entries found" || echo " 0 SDL_render_metal entries"
+          grep -c "Metal.framework" "$PROJECT_FILE" 2>/dev/null && echo " Metal.framework entries found" || echo " 0 Metal.framework entries"
+          
+          # ── Step 2: Verify source files exist ───────────────────────────────
           METAL_SHADERS_FILE="RSDKv5/RSDK/Graphics/SDL2/SDL2MetalShaders.mm"
           METAL_DIR="dependencies/ios/SDL/src/render/metal"
           
-          # Verify files exist
-          if [ ! -f "$METAL_SHADERS_FILE" ]; then
-            echo "ERROR: SDL2MetalShaders.mm not found"
-            exit 1
-          fi
-          
-          if [ ! -d "$METAL_DIR" ]; then
-            echo "ERROR: SDL Metal directory not found"
-            exit 1
-          fi
-          
-          echo "✓ Found SDL2MetalShaders.mm"
-          echo "✓ Found SDL Metal directory"
-          
-          # Collect all files to add
-          FILES_TO_ADD=(
-            "$METAL_SHADERS_FILE"
-            "$METAL_DIR/SDL_render_metal.m"
-            "$METAL_DIR/SDL_shaders_metal.metal"
-          )
-          
-          echo ""
-          echo "Files to add:"
-          for file in "${FILES_TO_ADD[@]}"; do
-            echo "  ✓ $file"
-          done
-          
-          # Generate IDs
-          METAL_FW_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
-          METAL_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
-          
-          echo ""
-          echo "Adding files to Xcode project..."
-          
-          declare -a BUILD_IDS
-          
-          # Add each file
-          for file_path in "${FILES_TO_ADD[@]}"; do
-            FILE_NAME=$(basename "$file_path")
-            FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
-            BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
-            
-            BUILD_IDS+=("$BUILD_ID")
-            
-            # Determine file type
-            if [[ "$FILE_NAME" == *.metal ]]; then
-              FILE_TYPE="sourcecode.metal"
-            elif [[ "$FILE_NAME" == *.mm ]]; then
-              FILE_TYPE="sourcecode.cpp.objcpp"
-            elif [[ "$FILE_NAME" == *.m ]]; then
-              FILE_TYPE="sourcecode.c.objc"
+          for f in "$METAL_SHADERS_FILE" \
+                   "$METAL_DIR/SDL_render_metal.m" \
+                   "$METAL_DIR/SDL_shaders_metal.metal"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Missing file: $f"
+              exit 1
             fi
-            
-            echo "  $FILE_NAME (ID: $FILE_ID, Build: $BUILD_ID)"
-            
-            # Add file reference
-            sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
-            \		'"$FILE_ID"' /* '"$FILE_NAME"' */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = '"$FILE_TYPE"'; name = '"$FILE_NAME"'; path = '"$file_path"'; sourceTree = SOURCE_ROOT; };
-            ' "$PROJECT_FILE"
-            
-            # Add build file
-            sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
-            \		'"$BUILD_ID"' /* '"$FILE_NAME"' in Sources */ = {isa = PBXBuildFile; fileRef = '"$FILE_ID"' /* '"$FILE_NAME"' */; };
-            ' "$PROJECT_FILE"
+            echo "✓ $f"
           done
           
+          # ── Step 3: Check what already exists in the project ─────────────────
           echo ""
-          echo "Finding RSDKv5 build phases..."
+          echo "Checking existing project entries..."
           
-          # Find RSDKv5 target - look for the exact pattern
-          RSDK_TARGET_ID=$(grep -n "RSDKv5 \*/" "$PROJECT_FILE" | grep "PBXNativeTarget" -B 5 | head -1 | cut -d: -f1 | xargs -I {} sed -n '{}p' "$PROJECT_FILE" | awk '{print $1}')
+          HAS_SHADERS=$(grep -c "SDL2MetalShaders.mm" "$PROJECT_FILE" || echo "0")
+          HAS_RENDER=$(grep -c "SDL_render_metal.m" "$PROJECT_FILE" || echo "0")
+          HAS_METAL_FW=$(grep -c "Metal.framework" "$PROJECT_FILE" || echo "0")
           
-          # Alternative method - find all native targets and filter
-          if [ -z "$RSDK_TARGET_ID" ]; then
-            echo "  Using alternative target search..."
-            RSDK_TARGET_ID=$(awk '
-              /\/\* RSDKv5 \*\/ = \{/ { id = $1; checking = 1; next }
-              checking && /isa = PBXNativeTarget/ { print id; exit }
-              checking && /\}\;/ { checking = 0 }
-            ' "$PROJECT_FILE")
-          fi
+          echo "  SDL2MetalShaders.mm entries: $HAS_SHADERS"
+          echo "  SDL_render_metal.m entries:  $HAS_RENDER"
+          echo "  Metal.framework entries:     $HAS_METAL_FW"
           
-          echo "  Target ID: $RSDK_TARGET_ID"
+          # Known sources phase ID from diagnostic output
+          SOURCES_PHASE_ID="F2FD447928C3E07E003A887A"
+          FRAMEWORKS_PHASE_ID="F2FD447A28C3E07E003A887A"
           
-          if [ -z "$RSDK_TARGET_ID" ]; then
-            echo "ERROR: Could not find RSDKv5 target"
-            exit 1
-          fi
-          
-          # Extract the buildPhases array from the target
-          echo "  Extracting build phases..."
-          SOURCES_PHASE_ID=$(awk -v tid="$RSDK_TARGET_ID" '
-            $1 == tid { found_target = 1 }
-            found_target && /buildPhases = \(/ { in_phases = 1; next }
-            in_phases && /Sources/ { 
-              gsub(/[^A-F0-9]/, "", $1)
-              if (length($1) == 24) {
-                print $1
-                exit
-              }
-            }
-            in_phases && /\);/ { exit }
-          ' "$PROJECT_FILE")
-          
-          FRAMEWORKS_PHASE_ID=$(awk -v tid="$RSDK_TARGET_ID" '
-            $1 == tid { found_target = 1 }
-            found_target && /buildPhases = \(/ { in_phases = 1; next }
-            in_phases && /Frameworks/ { 
-              gsub(/[^A-F0-9]/, "", $1)
-              if (length($1) == 24) {
-                print $1
-                exit
-              }
-            }
-            in_phases && /\);/ { exit }
-          ' "$PROJECT_FILE")
-          
-          echo "  Sources phase: $SOURCES_PHASE_ID"
-          echo "  Frameworks phase: $FRAMEWORKS_PHASE_ID"
-          
-          if [ -z "$SOURCES_PHASE_ID" ]; then
-            echo "ERROR: Could not find sources phase"
-            echo "Target block:"
-            grep -A 30 "^$RSDK_TARGET_ID" "$PROJECT_FILE"
-            exit 1
-          fi
-          
-          # Add to sources phase
           echo ""
-          echo "Adding to Sources phase..."
-          for i in "${!BUILD_IDS[@]}"; do
-            BUILD_ID="${BUILD_IDS[$i]}"
-            FILE_NAME=$(basename "${FILES_TO_ADD[$i]}")
+          echo "Sources phase:    $SOURCES_PHASE_ID"
+          echo "Frameworks phase: $FRAMEWORKS_PHASE_ID"
+          
+          # ── Step 4: Add SDL2MetalShaders.mm if not present ───────────────────
+          if [ "$HAS_SHADERS" -eq 0 ]; then
+            echo ""
+            echo "Adding SDL2MetalShaders.mm..."
             
-            awk -v phase="$SOURCES_PHASE_ID" -v build="$BUILD_ID" -v name="$FILE_NAME" '
+            SHADERS_FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            SHADERS_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            
+            # File reference
+            sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
+            \		'"$SHADERS_FILE_ID"' /* SDL2MetalShaders.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = SDL2MetalShaders.mm; path = RSDKv5/RSDK/Graphics/SDL2/SDL2MetalShaders.mm; sourceTree = SOURCE_ROOT; };
+            ' "$PROJECT_FILE"
+            
+            # Build file
+            sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
+            \		'"$SHADERS_BUILD_ID"' /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = '"$SHADERS_FILE_ID"' /* SDL2MetalShaders.mm */; };
+            ' "$PROJECT_FILE"
+            
+            # Add to sources phase
+            awk -v phase="$SOURCES_PHASE_ID" -v build="$SHADERS_BUILD_ID" '
               $1 == phase { in_phase = 1 }
               in_phase && /files = \(/ { 
                 print
-                print "\t\t\t\t" build " /* " name " in Sources */,"
+                print "\t\t\t\t" build " /* SDL2MetalShaders.mm in Sources */,"
                 next
               }
               { print }
-            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
-            mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
-            echo "  ✓ Added $FILE_NAME"
-          done
+            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp" && mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
+            
+            echo "  ✓ SDL2MetalShaders.mm added"
+          else
+            echo "  ✓ SDL2MetalShaders.mm already present"
+          fi
           
-          # Add Metal.framework
-          echo ""
-          echo "Adding Metal.framework..."
+          # ── Step 5: Add SDL_render_metal.m if not present ────────────────────
+          if [ "$HAS_RENDER" -eq 0 ]; then
+            echo ""
+            echo "Adding SDL_render_metal.m..."
+            
+            RENDER_FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            RENDER_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            
+            # File reference
+            sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
+            \		'"$RENDER_FILE_ID"' /* SDL_render_metal.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SDL_render_metal.m; path = dependencies/ios/SDL/src/render/metal/SDL_render_metal.m; sourceTree = SOURCE_ROOT; };
+            ' "$PROJECT_FILE"
+            
+            # Build file
+            sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
+            \		'"$RENDER_BUILD_ID"' /* SDL_render_metal.m in Sources */ = {isa = PBXBuildFile; fileRef = '"$RENDER_FILE_ID"' /* SDL_render_metal.m */; };
+            ' "$PROJECT_FILE"
+            
+            # Add to sources phase
+            awk -v phase="$SOURCES_PHASE_ID" -v build="$RENDER_BUILD_ID" '
+              $1 == phase { in_phase = 1 }
+              in_phase && /files = \(/ { 
+                print
+                print "\t\t\t\t" build " /* SDL_render_metal.m in Sources */,"
+                next
+              }
+              { print }
+            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp" && mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
+            
+            echo "  ✓ SDL_render_metal.m added"
+          else
+            echo "  ✓ SDL_render_metal.m already present"
+          fi
           
-          sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
-          \		'"$METAL_FW_ID"' /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-          ' "$PROJECT_FILE"
-          
-          sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
-          \		'"$METAL_BUILD_ID"' /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = '"$METAL_FW_ID"' /* Metal.framework */; };
-          ' "$PROJECT_FILE"
-          
-          if [ -n "$FRAMEWORKS_PHASE_ID" ]; then
+          # ── Step 6: Add Metal.framework if not present ───────────────────────
+          if [ "$HAS_METAL_FW" -eq 0 ]; then
+            echo ""
+            echo "Adding Metal.framework..."
+            
+            METAL_FW_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            METAL_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            
+            # File reference
+            sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
+            \		'"$METAL_FW_ID"' /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+            ' "$PROJECT_FILE"
+            
+            # Build file
+            sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
+            \		'"$METAL_BUILD_ID"' /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = '"$METAL_FW_ID"' /* Metal.framework */; };
+            ' "$PROJECT_FILE"
+            
+            # Add to frameworks phase (NOT sources phase)
             awk -v phase="$FRAMEWORKS_PHASE_ID" -v build="$METAL_BUILD_ID" '
               $1 == phase { in_phase = 1 }
               in_phase && /files = \(/ { 
@@ -211,9 +184,44 @@ jobs:
                 next
               }
               { print }
-            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
-            mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
-            echo "  ✓ Added Metal.framework to link phase"
+            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp" && mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
+            
+            echo "  ✓ Metal.framework added to Frameworks phase"
+          else
+            echo "  ✓ Metal.framework already present"
+          fi
+          
+          # ── Step 7: Verify final state ───────────────────────────────────────
+          echo ""
+          echo "=== Final verification ==="
+          
+          # Check entries exist
+          grep -q "SDL2MetalShaders.mm in Sources" "$PROJECT_FILE" && \
+            echo "✓ SDL2MetalShaders.mm in Sources" || echo "✗ SDL2MetalShaders.mm MISSING from Sources"
+          
+          grep -q "SDL_render_metal.m in Sources" "$PROJECT_FILE" && \
+            echo "✓ SDL_render_metal.m in Sources" || echo "✗ SDL_render_metal.m MISSING from Sources"
+          
+          grep -q "Metal.framework in Frameworks" "$PROJECT_FILE" && \
+            echo "✓ Metal.framework in Frameworks" || echo "✗ Metal.framework MISSING from Frameworks"
+          
+          # Check no duplicates
+          SHADERS_COUNT=$(grep -c "SDL2MetalShaders.mm in Sources" "$PROJECT_FILE" || echo "0")
+          RENDER_COUNT=$(grep -c "SDL_render_metal.m in Sources" "$PROJECT_FILE" || echo "0")
+          METAL_COUNT=$(grep -c "Metal.framework in Frameworks" "$PROJECT_FILE" || echo "0")
+          
+          echo ""
+          echo "Entry counts (should all be 1 or 2):"
+          echo "  SDL2MetalShaders.mm in Sources: $SHADERS_COUNT"
+          echo "  SDL_render_metal.m in Sources:  $RENDER_COUNT"
+          echo "  Metal.framework in Frameworks:  $METAL_COUNT"
+          
+          if [ "$SHADERS_COUNT" -gt 2 ] || [ "$RENDER_COUNT" -gt 2 ] || [ "$METAL_COUNT" -gt 2 ]; then
+            echo ""
+            echo "WARNING: Duplicate entries detected!"
+          else
+            echo ""
+            echo "✓ No duplicates detected"
           fi
           
           echo ""
