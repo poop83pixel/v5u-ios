@@ -29,7 +29,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-                 # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
+        # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
       - name: Add Metal framework and shaders to Xcode project
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
@@ -37,60 +37,42 @@ jobs:
           # Backup original
           cp "$PROJECT_FILE" "$PROJECT_FILE.backup"
           
-          echo "Searching for SDL Metal implementation files..."
+          echo "Adding Metal support to Xcode project..."
           
-          # Find SDL metal directory
-          METAL_DIR=""
-          POSSIBLE_PATHS=(
-            "dependencies/ios/SDL/src/render/metal"
-            "dependencies/ios/SDL2/src/render/metal"
-            "dependencies/all/SDL/src/render/metal"
+          # Files to add
+          METAL_SHADERS_FILE="RSDKv5/RSDK/Graphics/SDL2/SDL2MetalShaders.mm"
+          METAL_DIR="dependencies/ios/SDL/src/render/metal"
+          
+          # Verify files exist
+          if [ ! -f "$METAL_SHADERS_FILE" ]; then
+            echo "ERROR: SDL2MetalShaders.mm not found at $METAL_SHADERS_FILE"
+            exit 1
+          fi
+          
+          if [ ! -d "$METAL_DIR" ]; then
+            echo "ERROR: SDL Metal directory not found at $METAL_DIR"
+            exit 1
+          fi
+          
+          echo "✓ Found SDL2MetalShaders.mm"
+          echo "✓ Found SDL Metal directory"
+          
+          # Collect all files to add
+          FILES_TO_ADD=(
+            "$METAL_SHADERS_FILE"
+            "$METAL_DIR/SDL_render_metal.m"
+            "$METAL_DIR/SDL_shaders_metal.metal"
           )
-          
-          for path in "${POSSIBLE_PATHS[@]}"; do
-            if [ -d "$path" ]; then
-              METAL_DIR="$path"
-              echo "✓ Found Metal directory: $METAL_DIR"
-              break
-            fi
-          done
-          
-          if [ -z "$METAL_DIR" ]; then
-            echo "ERROR: Metal directory not found!"
-            find dependencies -type d -name metal 2>/dev/null | grep render || true
-            exit 1
-          fi
-          
-          echo ""
-          echo "Metal directory contents:"
-          ls -la "$METAL_DIR"
-          echo ""
-          
-          # Find all Metal-related source files that need to be compiled
-          METAL_FILES=()
-          
-          # Add SDL_render_metal.m (the main implementation)
-          if [ -f "$METAL_DIR/SDL_render_metal.m" ]; then
-            METAL_FILES+=("$METAL_DIR/SDL_render_metal.m")
-            echo "✓ Found SDL_render_metal.m (main implementation)"
-          fi
-          
-          # Add SDL_shaders_metal.metal (shader source)
-          if [ -f "$METAL_DIR/SDL_shaders_metal.metal" ]; then
-            METAL_FILES+=("$METAL_DIR/SDL_shaders_metal.metal")
-            echo "✓ Found SDL_shaders_metal.metal (shader source)"
-          fi
-          
-          if [ ${#METAL_FILES[@]} -eq 0 ]; then
-            echo "ERROR: No Metal implementation files found!"
-            echo "Expected: SDL_render_metal.m and/or SDL_shaders_metal.metal"
-            exit 1
-          fi
           
           echo ""
           echo "Files to add to Xcode project:"
-          for file in "${METAL_FILES[@]}"; do
-            echo "  - $(basename "$file")"
+          for file in "${FILES_TO_ADD[@]}"; do
+            if [ -f "$file" ]; then
+              echo "  ✓ $file"
+            else
+              echo "  ✗ $file (NOT FOUND)"
+              exit 1
+            fi
           done
           
           # Generate IDs for Metal.framework
@@ -100,64 +82,55 @@ jobs:
           echo ""
           echo "Adding files to Xcode project..."
           
-          # Add each Metal source file
-          for metal_file_path in "${METAL_FILES[@]}"; do
-            SHADER_FILE=$(basename "$metal_file_path")
-            SHADER_FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
-            SHADER_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+          # Add each file
+          for file_path in "${FILES_TO_ADD[@]}"; do
+            FILE_NAME=$(basename "$file_path")
+            FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+            BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
             
             # Determine file type
-            if [[ "$SHADER_FILE" == *.metal ]]; then
+            if [[ "$FILE_NAME" == *.metal ]]; then
               FILE_TYPE="sourcecode.metal"
-            elif [[ "$SHADER_FILE" == *.m ]]; then
-              FILE_TYPE="sourcecode.c.objc"
-            elif [[ "$SHADER_FILE" == *.mm ]]; then
+            elif [[ "$FILE_NAME" == *.mm ]]; then
               FILE_TYPE="sourcecode.cpp.objcpp"
+            elif [[ "$FILE_NAME" == *.m ]]; then
+              FILE_TYPE="sourcecode.c.objc"
             else
               FILE_TYPE="sourcecode"
             fi
             
-            echo "  Adding: $SHADER_FILE"
-            echo "    File ID:  $SHADER_FILE_ID"
-            echo "    Build ID: $SHADER_BUILD_ID"
-            echo "    Type:     $FILE_TYPE"
+            echo "  $FILE_NAME (ID: $FILE_ID)"
             
             # Add file reference
             sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
-            \		'"$SHADER_FILE_ID"' /* '"$SHADER_FILE"' */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = '"$FILE_TYPE"'; name = '"$SHADER_FILE"'; path = '"$metal_file_path"'; sourceTree = SOURCE_ROOT; };
+            \		'"$FILE_ID"' /* '"$FILE_NAME"' */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = '"$FILE_TYPE"'; name = '"$FILE_NAME"'; path = '"$file_path"'; sourceTree = SOURCE_ROOT; };
             ' "$PROJECT_FILE"
             
             # Add build file
             sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
-            \		'"$SHADER_BUILD_ID"' /* '"$SHADER_FILE"' in Sources */ = {isa = PBXBuildFile; fileRef = '"$SHADER_FILE_ID"' /* '"$SHADER_FILE"' */; };
+            \		'"$BUILD_ID"' /* '"$FILE_NAME"' in Sources */ = {isa = PBXBuildFile; fileRef = '"$FILE_ID"' /* '"$FILE_NAME"' */; };
             ' "$PROJECT_FILE"
             
             # Add to compile sources
-            awk -v shader_id="$SHADER_BUILD_ID" -v shader_name="$SHADER_FILE" '
+            awk -v build_id="$BUILD_ID" -v file_name="$FILE_NAME" '
               /\/\* Begin PBXSourcesBuildPhase section \*\// { in_sources=1 }
               in_sources && /files = \(/ && !in_files { in_files=1; print; next }
               in_files && !added && /\);/ { 
-                print "\t\t\t\t" shader_id " /* " shader_name " in Sources */,"
+                print "\t\t\t\t" build_id " /* " file_name " in Sources */,"
                 added=1
               }
               { print }
             ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
             mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
-            
-            echo "    ✓ Added to project"
           done
           
-          # Add Metal.framework file reference
-          echo ""
-          echo "  Adding Metal.framework"
-          echo "    Framework ID: $METAL_FW_ID"
-          echo "    Build ID:     $METAL_BUILD_ID"
+          # Add Metal.framework
+          echo "  Metal.framework (ID: $METAL_FW_ID)"
           
           sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
           \		'"$METAL_FW_ID"' /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
           ' "$PROJECT_FILE"
           
-          # Add build file for Metal framework
           sed -i '' '/\/\* Begin PBXBuildFile section \*\//a\
           \		'"$METAL_BUILD_ID"' /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = '"$METAL_FW_ID"' /* Metal.framework */; };
           ' "$PROJECT_FILE"
@@ -174,10 +147,9 @@ jobs:
           ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
           mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
           
-          echo "    ✓ Added to link phase"
           echo ""
           echo "═══════════════════════════════════════════════════════"
-          echo "✓ Added ${#METAL_FILES[@]} Metal source file(s)"
+          echo "✓ Added ${#FILES_TO_ADD[@]} Metal source files"
           echo "✓ Added Metal.framework"
           echo "═══════════════════════════════════════════════════════"
 
