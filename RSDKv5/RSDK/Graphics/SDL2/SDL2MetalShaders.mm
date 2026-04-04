@@ -145,9 +145,12 @@ void MetalShaders_UpdateVertexBuffer(float screenW, float screenH, float texW, f
 void MetalShaders_Release(void) {
     for (int i = 0; i < MAX_SH; ++i) s_pipelines[i] = nil;
     for (int i = 0; i < 4;      ++i) s_screenTex[i]  = nil;
-    s_imageTex = s_vertexBuf = nil;
+    s_imageTex = nil;
+    s_vertexBuf = nil;
     s_samplerNearest = s_samplerLinear = nil;
-    s_vertexDesc = nil; s_device = nil; s_shaderCount = 0;
+    s_vertexDesc = nil; 
+    s_device = nil; 
+    s_shaderCount = 0;
 }
 
 bool MetalShaders_Load(const char *name, bool linear, const char *source, int idx) {
