@@ -222,7 +222,7 @@ jobs:
           echo "═══════════════════════════════════════════════════════"
 
 
-            - name: Diagnose sources phase contents
+      - name: Diagnose sources phase contents
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
           
