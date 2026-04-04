@@ -1,3 +1,6 @@
+#if TARGET_OS_IPHONE
+#include "SDL2MetalShaders.h"
+#endif
 
 SDL_Window *RenderDevice::window     = nullptr;
 SDL_Renderer *RenderDevice::renderer = nullptr;
@@ -81,10 +84,18 @@ bool RenderDevice::Init()
 
 void RenderDevice::CopyFrameBuffer()
 {
-    int32 pitch    = 0;
-    uint16 *pixels = NULL;
-
     for (int32 s = 0; s < videoSettings.screenCount; ++s) {
+#if TARGET_OS_IPHONE
+        if (videoSettings.shaderSupport) {
+            // Upload directly to the Metal texture; skip the SDL streaming texture.
+            MetalShaders_UpdateScreenTexture(s, screens[s].frameBuffer,
+                                             screens[s].size.x, SCREEN_YSIZE,
+                                             screens[s].pitch);
+            continue;
+        }
+#endif
+        int32 pitch    = 0;
+        uint16 *pixels = NULL;
         SDL_LockTexture(screenTexture[s], NULL, (void **)&pixels, &pitch);
 
         uint16 *frameBuffer = screens[s].frameBuffer;
@@ -113,6 +124,65 @@ void RenderDevice::FlipScreen()
     // pillarboxes in fullscreen from displaying garbage data.
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
     SDL_RenderClear(renderer);
+
+#if TARGET_OS_IPHONE
+    if (videoSettings.shaderSupport) {
+        // Build the draw-call list from the same logic as the SDL path below,
+        // but expressed as {screenIndex, startVert} pairs for Metal.
+        MetalDrawCall draws[4];
+        int drawCount = 0;
+
+        switch (videoSettings.screenCount) {
+            default:
+            case 0: {
+#if RETRO_REV02
+                int sv = 54;
+#else
+                int sv = 18;
+#endif
+                draws[drawCount++] = { -1, sv }; // -1 = imageTexture
+                break;
+            }
+            case 1:
+                draws[drawCount++] = { 0, 0 };
+                break;
+            case 2:
+#if RETRO_REV02
+                draws[drawCount++] = { 0, startVertex_2P[0] };
+                draws[drawCount++] = { 1, startVertex_2P[1] };
+#else
+                draws[drawCount++] = { 0, 6 };
+                draws[drawCount++] = { 1, 12 };
+#endif
+                break;
+#if RETRO_REV02
+            case 3:
+                draws[drawCount++] = { 0, startVertex_3P[0] };
+                draws[drawCount++] = { 1, startVertex_3P[1] };
+                draws[drawCount++] = { 2, startVertex_3P[2] };
+                break;
+            case 4:
+                draws[drawCount++] = { 0, 30 };
+                draws[drawCount++] = { 1, 36 };
+                draws[drawCount++] = { 2, 42 };
+                draws[drawCount++] = { 3, 48 };
+                break;
+#endif
+        }
+
+        MetalShaders_FlipScreen(renderer,
+                                videoSettings.shaderID,
+                                shaderList[videoSettings.shaderID].linear,
+                                draws, drawCount,
+                                pixelSize.x,   pixelSize.y,
+                                textureSize.x, textureSize.y,
+                                viewSize.x,    viewSize.y,
+                                dimAmount);
+
+        SDL_RenderPresent(renderer);
+        return;
+    }
+#endif
 
 #if (SDL_COMPILEDVERSION >= SDL_VERSIONNUM(2, 0, 18))
     int32 startVert = 0;
@@ -322,6 +392,11 @@ void RenderDevice::Release(bool32 isRefresh)
             free(displayInfo.displays);
         displayInfo.displays = NULL;
     }
+
+#if TARGET_OS_IPHONE
+    if (!isRefresh)
+        MetalShaders_Release();
+#endif
 
     if (!isRefresh && renderer)
         SDL_DestroyRenderer(renderer);
@@ -553,17 +628,61 @@ bool RenderDevice::InitGraphicsAPI()
         videoSettings.viewportY = 0;
         videoSettings.viewportW = 1.0 / viewSize.x;
         videoSettings.viewportH = 1.0 / viewSize.y;
+
+#if TARGET_OS_IPHONE
+        videoSettings.shaderSupport = MetalShaders_Init(
+            renderer,
+            textureSize.x, textureSize.y,
+            pixelSize.x,   pixelSize.y);
+        if (videoSettings.shaderSupport)
+            MetalShaders_UpdateVertexBuffer(pixelSize.x, pixelSize.y,
+                                            textureSize.x, textureSize.y);
+#endif
         
         return true;
     }
     
-    void RenderDevice::LoadShader(const char *fileName, bool32 linear) { PrintLog(PRINT_NORMAL, "This render device does not support shaders!"); }
+    void RenderDevice::LoadShader(const char *fileName, bool32 linear)
+    {
+#if TARGET_OS_IPHONE
+        if (!videoSettings.shaderSupport) return;
+
+        for (int32 i = 0; i < shaderCount; ++i)
+            if (strcmp(shaderList[i].name, fileName) == 0) return;
+
+        if (shaderCount == SHADER_COUNT) return;
+
+        char fullFilePath[0x100];
+        FileInfo info;
+
+        sprintf_s(fullFilePath, sizeof(fullFilePath), "Data/Shaders/Metal/%s.metal", fileName);
+        InitFileInfo(&info);
+        if (LoadFile(&info, fullFilePath, FMODE_RB)) {
+            uint8 *fileData = NULL;
+            AllocateStorage((void **)&fileData, info.fileSize + 1, DATASET_TMP, false);
+            ReadBytes(&info, fileData, info.fileSize);
+            fileData[info.fileSize] = 0;
+            CloseFile(&info);
+
+            if (MetalShaders_Load(fileName, linear, (const char *)fileData, shaderCount)) {
+                sprintf_s(shaderList[shaderCount].name,
+                          sizeof(shaderList[shaderCount].name), "%s", fileName);
+                shaderList[shaderCount].linear = linear;
+                shaderCount++;
+            }
+            RemoveStorageEntry((void **)&fileData);
+        } else {
+            PrintLog(PRINT_NORMAL, "[SDL2/Metal] Could not open shader: %s", fullFilePath);
+        }
+#else
+        PrintLog(PRINT_NORMAL, "This render device does not support shaders!");
+#endif
+    }
     
     bool RenderDevice::InitShaders()
     {
         int32 maxShaders = 0;
 #if RETRO_USE_MOD_LOADER
-        // who knows maybe SDL3 will have shaders
         shaderCount = 0;
 #endif
         
@@ -1080,6 +1199,18 @@ bool RenderDevice::InitGraphicsAPI()
         }
         
         SDL_UnlockTexture(imageTexture);
+
+#if TARGET_OS_IPHONE
+        if (videoSettings.shaderSupport) {
+            // Re-read the pixels we just wrote and push to Metal.
+            // Simpler: lock again to get the ARGB pointer, upload, unlock.
+            int32 mPitch = 0;
+            uint32 *mPixels = NULL;
+            SDL_LockTexture(imageTexture, NULL, (void **)&mPixels, &mPitch);
+            MetalShaders_UpdateImageTexture(width, height, mPixels);
+            SDL_UnlockTexture(imageTexture);
+        }
+#endif
     }
     
     void RenderDevice::SetupVideoTexture_YUV420(int32 width, int32 height, uint8 *yPlane, uint8 *uPlane, uint8 *vPlane, int32 strideY, int32 strideU,
@@ -1097,6 +1228,15 @@ bool RenderDevice::InitGraphicsAPI()
         }
         
         SDL_UpdateYUVTexture(imageTexture, NULL, yPlane, strideY, uPlane, strideU, vPlane, strideV);
+#if TARGET_OS_IPHONE
+        if (videoSettings.shaderSupport) {
+            int32 mPitch = 0;
+            uint32 *mPixels = NULL;
+            SDL_LockTexture(imageTexture, NULL, (void **)&mPixels, &mPitch);
+            MetalShaders_UpdateImageTexture(width, height, mPixels);
+            SDL_UnlockTexture(imageTexture);
+        }
+#endif
     }
     void RenderDevice::SetupVideoTexture_YUV422(int32 width, int32 height, uint8 *yPlane, uint8 *uPlane, uint8 *vPlane, int32 strideY, int32 strideU,
                                                 int32 strideV)
@@ -1113,6 +1253,15 @@ bool RenderDevice::InitGraphicsAPI()
         }
         
         SDL_UpdateYUVTexture(imageTexture, NULL, yPlane, strideY, uPlane, strideU, vPlane, strideV);
+#if TARGET_OS_IPHONE
+        if (videoSettings.shaderSupport) {
+            int32 mPitch = 0;
+            uint32 *mPixels = NULL;
+            SDL_LockTexture(imageTexture, NULL, (void **)&mPixels, &mPitch);
+            MetalShaders_UpdateImageTexture(width, height, mPixels);
+            SDL_UnlockTexture(imageTexture);
+        }
+#endif
     }
     void RenderDevice::SetupVideoTexture_YUV444(int32 width, int32 height, uint8 *yPlane, uint8 *uPlane, uint8 *vPlane, int32 strideY, int32 strideU,
                                                 int32 strideV)
@@ -1129,6 +1278,15 @@ bool RenderDevice::InitGraphicsAPI()
         }
         
         SDL_UpdateYUVTexture(imageTexture, NULL, yPlane, strideY, uPlane, strideU, vPlane, strideV);
+#if TARGET_OS_IPHONE
+        if (videoSettings.shaderSupport) {
+            int32 mPitch = 0;
+            uint32 *mPixels = NULL;
+            SDL_LockTexture(imageTexture, NULL, (void **)&mPixels, &mPitch);
+            MetalShaders_UpdateImageTexture(width, height, mPixels);
+            SDL_UnlockTexture(imageTexture);
+        }
+#endif
     }
     
 #if TARGET_OS_IPHONE
