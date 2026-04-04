@@ -29,10 +29,42 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # ── 2.5. Find Info.plist (debugging — remove after first run) ───────────
+      - name: Find Info.plist
+        run: |
+          echo "Searching for Info.plist files..."
+          find . -name "Info.plist" -not -path "*/.*" | head -10
+
       # ── 3. Build (unsigned — no Apple Developer account required) ────────────
       - name: Archive RSDKv5U
         run: |
           set -o pipefail
+          
+          # ⚠️ UPDATE THIS PATH after checking the "Find Info.plist" step output
+          INFO_PLIST="dependencies/ios/Info.plist"
+          
+          # Verify the plist exists
+          if [ ! -f "$INFO_PLIST" ]; then
+            echo "ERROR: Info.plist not found at $INFO_PLIST"
+            echo "Available Info.plist files:"
+            find . -name "Info.plist" -not -path "*/.*"
+            exit 1
+          fi
+          
+          echo "Patching $INFO_PLIST for Files app support..."
+          
+          # Add Files app support keys (with error handling)
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$INFO_PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :UIFileSharingEnabled true" "$INFO_PLIST"
+          
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$INFO_PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :LSSupportsOpeningDocumentsInPlace true" "$INFO_PLIST"
+          
+          # Verify the keys were added
+          echo "Verifying plist modifications..."
+          /usr/libexec/PlistBuddy -c "Print :UIFileSharingEnabled" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :LSSupportsOpeningDocumentsInPlace" "$INFO_PLIST"
+          
           xcodebuild archive \
             -project RSDKv5.xcodeproj \
             -scheme RSDKv5 \
@@ -40,7 +72,6 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath "${{ runner.temp }}/RSDKv5U.xcarchive" \
             RETRO_REVISION=3 \
-            INFOPLIST_FILE="" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
@@ -71,11 +102,18 @@ jobs:
             find "$ARCHIVE" -maxdepth 4
             exit 1
           fi
+          
+          echo "Found app bundle: $APP"
 
           cp -r "$APP" "$PAYLOAD_DIR/"
           cd "${{ runner.temp }}"
           zip -qr "$IPA_DIR/RSDKv5U.ipa" Payload
           echo "IPA: $IPA_DIR/RSDKv5U.ipa ($(du -sh "$IPA_DIR/RSDKv5U.ipa" | cut -f1))"
+          
+          # Verify the IPA contains our plist modifications
+          echo "Verifying Files app support in IPA..."
+          unzip -p "$IPA_DIR/RSDKv5U.ipa" 'Payload/*.app/Info.plist' | \
+            plutil -p - | grep -E "UIFileSharingEnabled|LSSupportsOpeningDocumentsInPlace"
 
       # ── 5. Upload artifact ───────────────────────────────────────────────────
       - name: Upload IPA
@@ -104,7 +142,7 @@ jobs:
 #       P12_PASS: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
 #       PROFILE_DATA: ${{ secrets.IOS_PROVISIONING_PROFILE }}
 #     run: |
-#       KEYCHAIN="$runner_temp/build.keychain"
+#       KEYCHAIN="${{ runner.temp }}/build.keychain"
 #       security create-keychain -p "" "$KEYCHAIN"
 #       security default-keychain -s "$KEYCHAIN"
 #       security unlock-keychain -p "" "$KEYCHAIN"
@@ -116,6 +154,14 @@ jobs:
 #       mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
 #       cp /tmp/app.mobileprovision \
 #         ~/Library/MobileDevice/Provisioning\ Profiles/
+#
+#   - name: Patch Info.plist for Files app support
+#     run: |
+#       INFO_PLIST="RSDKv5/Info.plist"  # ⚠️ Update this path
+#       /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$INFO_PLIST" 2>/dev/null || \
+#       /usr/libexec/PlistBuddy -c "Set :UIFileSharingEnabled true" "$INFO_PLIST"
+#       /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$INFO_PLIST" 2>/dev/null || \
+#       /usr/libexec/PlistBuddy -c "Set :LSSupportsOpeningDocumentsInPlace true" "$INFO_PLIST"
 #
 #   - name: Archive & export RSDKv5U (signed)
 #     env:
