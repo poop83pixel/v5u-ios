@@ -1577,8 +1577,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				965C08EE739F820DE9E76E1E /* SDL2MetalShaders.mm in Sources */,
-				3F58003F586FD26856CA7978 /* SDL_render_metal.m in Sources */,
 				F25BAC0F2A0FAD830004BA24 /* Settings.bundle in Resources */,
 				F26780F82A072EF6000AEBE5 /* Data in Resources */,
 				F2359CEC2A1040420009AB5E /* Assets.xcassets in Resources */,
