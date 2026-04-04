@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+			F74692CCCF00DEA4719A85B3 /* SDL2RenderDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD45FE28C3EF08003A887A /* SDL2RenderDevice.cpp */; };
 		965C08EE739F820DE9E76E1E /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5E0B2E361730191546FB215B /* SDL2MetalShaders.mm */; };
 		3F58003F586FD26856CA7978 /* SDL_render_metal.m in Sources */ = {isa = PBXBuildFile; fileRef = AD8A099A11C96114FF52DF78 /* SDL_render_metal.m */; };
 		F77C5FEF7E7A0CC6C1D9983F /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED4BD281FC298B880506581C /* Metal.framework */; };
@@ -1591,6 +1592,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F74692CCCF00DEA4719A85B3 /* SDL2RenderDevice.cpp in Sources */,
 				965C08EE739F820DE9E76E1E /* SDL2MetalShaders.mm in Sources */,
 				3F58003F586FD26856CA7978 /* SDL_render_metal.m in Sources */,
 				F2FD464D28C3EF08003A887A /* Scene3D.cpp in Sources */,
