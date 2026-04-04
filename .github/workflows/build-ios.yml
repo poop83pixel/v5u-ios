@@ -29,6 +29,76 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
+      - name: Add Metal framework and shaders to Xcode project
+        run: |
+          PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
+          
+          # Backup original
+          cp "$PROJECT_FILE" "$PROJECT_FILE.backup"
+          
+          # Generate unique IDs for our additions
+          SHADER_FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+          SHADER_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+          METAL_FW_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+          METAL_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
+          
+          echo "Generated IDs:"
+          echo "  Shader file:     $SHADER_FILE_ID"
+          echo "  Shader build:    $SHADER_BUILD_ID"
+          echo "  Metal framework: $METAL_FW_ID"
+          echo "  Metal build:     $METAL_BUILD_ID"
+          
+          # Add SDL2MetalShaders.mm file reference
+          sed -i.tmp1 '/\/\* Begin PBXFileReference section \*\//a\
+          \		'"$SHADER_FILE_ID"' /* SDL2MetalShaders.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = SDL2MetalShaders.mm; path = dependencies/all/SDL2/src/render/metal/SDL_render_metal.m; sourceTree = SOURCE_ROOT; };
+          ' "$PROJECT_FILE"
+          
+          # Add Metal.framework file reference
+          sed -i.tmp2 '/\/\* Begin PBXFileReference section \*\//a\
+          \		'"$METAL_FW_ID"' /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+          ' "$PROJECT_FILE"
+          
+          # Add build file for shader
+          sed -i.tmp3 '/\/\* Begin PBXBuildFile section \*\//a\
+          \		'"$SHADER_BUILD_ID"' /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = '"$SHADER_FILE_ID"' /* SDL2MetalShaders.mm */; };
+          ' "$PROJECT_FILE"
+          
+          # Add build file for Metal framework
+          sed -i.tmp4 '/\/\* Begin PBXBuildFile section \*\//a\
+          \		'"$METAL_BUILD_ID"' /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = '"$METAL_FW_ID"' /* Metal.framework */; };
+          ' "$PROJECT_FILE"
+          
+          # Add shader to compile sources (find PBXSourcesBuildPhase and add to files array)
+          # This finds the first occurrence and adds our file
+          awk -v shader_id="$SHADER_BUILD_ID" '
+            /\/\* Begin PBXSourcesBuildPhase section \*\// { in_sources=1 }
+            in_sources && /files = \(/ { in_files=1; print; next }
+            in_files && !added && /\);/ { 
+              print "\t\t\t\t" shader_id " /* SDL2MetalShaders.mm in Sources */,"
+              added=1
+            }
+            { print }
+          ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp5"
+          mv "$PROJECT_FILE.tmp5" "$PROJECT_FILE"
+          
+          # Add Metal.framework to link phase (find PBXFrameworksBuildPhase)
+          awk -v metal_id="$METAL_BUILD_ID" '
+            /\/\* Begin PBXFrameworksBuildPhase section \*\// { in_frameworks=1 }
+            in_frameworks && /files = \(/ { in_files=1; print; next }
+            in_files && !added && /\);/ { 
+              print "\t\t\t\t" metal_id " /* Metal.framework in Frameworks */,"
+              added=1
+            }
+            { print }
+          ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp6"
+          mv "$PROJECT_FILE.tmp6" "$PROJECT_FILE"
+          
+          # Clean up temp files
+          rm -f "$PROJECT_FILE".tmp*
+          
+          echo "✓ Metal support added to Xcode project"
+
       # ── 3. Build (unsigned — no Apple Developer account required) ────────────
       - name: Archive RSDKv5U
         run: |
