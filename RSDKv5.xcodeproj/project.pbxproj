@@ -7,10 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-			F74692CCCF00DEA4719A85B3 /* SDL2RenderDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD45FE28C3EF08003A887A /* SDL2RenderDevice.cpp */; };
-		965C08EE739F820DE9E76E1E /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5E0B2E361730191546FB215B /* SDL2MetalShaders.mm */; };
-		3F58003F586FD26856CA7978 /* SDL_render_metal.m in Sources */ = {isa = PBXBuildFile; fileRef = AD8A099A11C96114FF52DF78 /* SDL_render_metal.m */; };
-		F77C5FEF7E7A0CC6C1D9983F /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED4BD281FC298B880506581C /* Metal.framework */; };
 		F203FD912AA1433800F7B17D /* SDL2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2F153A52A070C3400C57723 /* SDL2.framework */; platformFilter = ios; };
 		F203FD922AA1433800F7B17D /* SDL2.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F2F153A52A070C3400C57723 /* SDL2.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F23038452A1034C0002EB2D9 /* SDL_uikit_main.c in Sources */ = {isa = PBXBuildFile; fileRef = F23038442A1034C0002EB2D9 /* SDL_uikit_main.c */; };
@@ -31,6 +27,8 @@
 		F2FD449328C3E080003A887A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F2FD449128C3E080003A887A /* LaunchScreen.storyboard */; platformFilter = ios; };
 		F2FD44F628C3E395003A887A /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD44F428C3E395003A887A /* main.cpp */; };
 		F2FD44FB28C3E430003A887A /* cocoaHelpers.mm in Sources */ = {isa = PBXBuildFile; fileRef = F2FD44F928C3E42F003A887A /* cocoaHelpers.mm */; };
+		CC110004CC110004CC110004 /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = CC110001CC110001CC110001 /* SDL2MetalShaders.mm */; };
+		CC110005CC110005CC110005 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC110003CC110003CC110003 /* Metal.framework */; platformFilter = ios; };
 		F2FD460128C3EF08003A887A /* RetroEngine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD451428C3EF08003A887A /* RetroEngine.cpp */; };
 		F2FD460228C3EF08003A887A /* Math.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD451628C3EF08003A887A /* Math.cpp */; };
 		F2FD460728C3EF08003A887A /* Reader.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F2FD452528C3EF08003A887A /* Reader.cpp */; };
@@ -242,9 +240,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		5E0B2E361730191546FB215B /* SDL2MetalShaders.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = SDL2MetalShaders.mm; path = RSDKv5/RSDK/Graphics/SDL2/SDL2MetalShaders.mm; sourceTree = SOURCE_ROOT; };
-		AD8A099A11C96114FF52DF78 /* SDL_render_metal.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SDL_render_metal.m; path = dependencies/ios/SDL/src/render/metal/SDL_render_metal.m; sourceTree = SOURCE_ROOT; };
-		ED4BD281FC298B880506581C /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		F23038442A1034C0002EB2D9 /* SDL_uikit_main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = SDL_uikit_main.c; path = dependencies/ios/SDL/src/main/uikit/SDL_uikit_main.c; sourceTree = SOURCE_ROOT; };
 		F23597AE2A103A630009AB5E /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		F23597AF2A103A630009AB5E /* iniparser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = iniparser.cpp; sourceTree = "<group>"; };
@@ -593,6 +588,9 @@
 		F2FD45FC28C3EF08003A887A /* Scene3D.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Scene3D.hpp; sourceTree = "<group>"; };
 		F2FD45FE28C3EF08003A887A /* SDL2RenderDevice.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SDL2RenderDevice.cpp; sourceTree = "<group>"; };
 		F2FD45FF28C3EF08003A887A /* SDL2RenderDevice.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = SDL2RenderDevice.hpp; sourceTree = "<group>"; };
+		CC110001CC110001CC110001 /* SDL2MetalShaders.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = SDL2MetalShaders.mm; sourceTree = "<group>"; };
+		CC110002CC110002CC110002 /* SDL2MetalShaders.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SDL2MetalShaders.h; sourceTree = "<group>"; };
+		CC110003CC110003CC110003 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		F2FD460028C3EF08003A887A /* Palette.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Palette.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -601,10 +599,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F77C5FEF7E7A0CC6C1D9983F /* Metal.framework in Frameworks */,
 				F203FD912AA1433800F7B17D /* SDL2.framework in Frameworks */,
 				F2B759F92A0734FA00710D50 /* libogg.a in Frameworks */,
 				F2C0B5882A0FC3D300783F5B /* UIKit.framework in Frameworks */,
+				CC110005CC110005CC110005 /* Metal.framework in Frameworks */,
 				F2B759FA2A0734FB00710D50 /* libtheoradec.a in Frameworks */,
 				F2B759FB2A0734FB00710D50 /* libvorbis.a in Frameworks */,
 			);
@@ -1112,6 +1110,7 @@
 			isa = PBXGroup;
 			children = (
 				F2C0B5702A0FC3D200783F5B /* UIKit.framework */,
+				CC110003CC110003CC110003 /* Metal.framework */,
 				F2B759D72A07341900710D50 /* Ogg.xcodeproj */,
 				F2B759DE2A07342000710D50 /* Vorbis.xcodeproj */,
 				F2B759ED2A07348900710D50 /* Theora.xcodeproj */,
@@ -1318,6 +1317,8 @@
 			children = (
 				F2FD45FE28C3EF08003A887A /* SDL2RenderDevice.cpp */,
 				F2FD45FF28C3EF08003A887A /* SDL2RenderDevice.hpp */,
+				CC110001CC110001CC110001 /* SDL2MetalShaders.mm */,
+				CC110002CC110002CC110002 /* SDL2MetalShaders.h */,
 			);
 			path = SDL2;
 			sourceTree = "<group>";
@@ -1592,15 +1593,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F74692CCCF00DEA4719A85B3 /* SDL2RenderDevice.cpp in Sources */,
-				965C08EE739F820DE9E76E1E /* SDL2MetalShaders.mm in Sources */,
-				3F58003F586FD26856CA7978 /* SDL_render_metal.m in Sources */,
 				F2FD464D28C3EF08003A887A /* Scene3D.cpp in Sources */,
 				F2FD464C28C3EF08003A887A /* Collision.cpp in Sources */,
 				F2FD44F628C3E395003A887A /* main.cpp in Sources */,
 				F2FD460A28C3EF08003A887A /* Input.cpp in Sources */,
 				F2359A6E2A103A640009AB5E /* iniparser.cpp in Sources */,
 				F2FD44FB28C3E430003A887A /* cocoaHelpers.mm in Sources */,
+				CC110004CC110004CC110004 /* SDL2MetalShaders.mm in Sources */,
 				F2FD463628C3EF08003A887A /* Audio.cpp in Sources */,
 				F2FD463128C3EF08003A887A /* Text.cpp in Sources */,
 				F2FD463428C3EF08003A887A /* Storage.cpp in Sources */,
@@ -1862,7 +1861,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
-				LLVM_LTO = NO;
+				LLVM_LTO = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = org.wamwoowam.RSDKv5;
