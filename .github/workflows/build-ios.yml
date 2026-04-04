@@ -221,6 +221,30 @@ jobs:
           echo "✓ Metal support configuration complete"
           echo "═══════════════════════════════════════════════════════"
 
+
+      - name: Diagnose project structure
+        run: |
+          PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
+          
+          echo "=== All PBXNativeTarget entries ==="
+          grep "PBXNativeTarget" "$PROJECT_FILE" -B 3 | grep -E "^\s+[A-F0-9]{24}" | head -20
+          
+          echo ""
+          echo "=== RSDKv5 target block ==="
+          awk '/RSDKv5 \*\/ = \{/,/^\t\};/' "$PROJECT_FILE" | head -50
+          
+          echo ""
+          echo "=== All Sources build phases ==="
+          grep "PBXSourcesBuildPhase" "$PROJECT_FILE" -B 2 | head -30
+          
+          echo ""
+          echo "=== Where SDL2MetalShaders.mm appears ==="
+          grep -n "SDL2MetalShaders" "$PROJECT_FILE"
+          
+          echo ""
+          echo "=== Where SDL_render_metal appears ==="
+          grep -n "SDL_render_metal" "$PROJECT_FILE"
+
       # ── 2.6. Verify Metal files are in compile sources ──────────────────────
       - name: Verify compilation setup
         run: |
