@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - ios
+      - master
   pull_request:
     branches:
-      - ios
+      - master
 
 jobs:
   v5u-ios:
@@ -32,6 +32,7 @@ jobs:
       # ── 3. Build (unsigned — no Apple Developer account required) ────────────
       - name: Archive RSDKv5U
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project RSDKv5.xcodeproj \
             -scheme RSDKv5 \
@@ -44,7 +45,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
-            | xcpretty || true 
+            | xcpretty --color --report html --output build-report.html
+
+      - name: Upload build report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: build-report.html
 
       # ── 4. Package as IPA ────────────────────────────────────────────────────
       # Because the build is unsigned we skip xcodebuild -exportArchive and
