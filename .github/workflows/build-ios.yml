@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - ios
   pull_request:
     branches:
-      - master
+      - ios
 
 jobs:
   v5u-ios:
