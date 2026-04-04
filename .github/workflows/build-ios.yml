@@ -222,28 +222,33 @@ jobs:
           echo "═══════════════════════════════════════════════════════"
 
 
-      - name: Diagnose project structure
+            - name: Diagnose sources phase contents
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
           
-          echo "=== All PBXNativeTarget entries ==="
-          grep "PBXNativeTarget" "$PROJECT_FILE" -B 3 | grep -E "^\s+[A-F0-9]{24}" | head -20
+          echo "=== Sources phase F2FD447928C3E07E003A887A contents ==="
+          awk '/F2FD447928C3E07E003A887A.*Sources/,/End PBXSourcesBuildPhase/' "$PROJECT_FILE" | head -60
           
           echo ""
-          echo "=== RSDKv5 target block ==="
-          awk '/RSDKv5 \*\/ = \{/,/^\t\};/' "$PROJECT_FILE" | head -50
+          echo "=== Native target F2FD447C28C3E07E003A887A block ==="
+          awk '/F2FD447C28C3E07E003A887A/,/^\t\};/' "$PROJECT_FILE" | head -40
           
           echo ""
-          echo "=== All Sources build phases ==="
-          grep "PBXSourcesBuildPhase" "$PROJECT_FILE" -B 2 | head -30
+          echo "=== Build settings - check for TARGET_OS_IPHONE ==="
+          grep -n "TARGET_OS_IPHONE\|SDKROOT\|IPHONEOS\|platform" "$PROJECT_FILE" | head -20
           
           echo ""
-          echo "=== Where SDL2MetalShaders.mm appears ==="
-          grep -n "SDL2MetalShaders" "$PROJECT_FILE"
+          echo "=== Check for OTHER_CFLAGS or preprocessor defs ==="
+          grep -n "GCC_PREPROCESSOR\|OTHER_CFLAGS\|SWIFT_ACTIVE" "$PROJECT_FILE" | head -20
           
           echo ""
-          echo "=== Where SDL_render_metal appears ==="
-          grep -n "SDL_render_metal" "$PROJECT_FILE"
+          echo "=== SDL2MetalShaders build file details ==="
+          grep -A 3 "SDL2MetalShaders.mm in Sources" "$PROJECT_FILE"
+          
+          echo ""
+          echo "=== Is SDL2MetalShaders in the RSDKv5 target's sources phase? ==="
+          # Check if 6248D5D42CF7849A1E5679BF appears inside F2FD447928C3E07E003A887A
+          awk '/F2FD447928C3E07E003A887A.*Sources/,/\};/' "$PROJECT_FILE" | grep "SDL2MetalShaders\|SDL_render_metal"
 
       # ── 2.6. Verify Metal files are in compile sources ──────────────────────
       - name: Verify compilation setup
