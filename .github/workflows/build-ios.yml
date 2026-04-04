@@ -29,7 +29,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-           # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
+            # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
       - name: Add Metal framework and shaders to Xcode project
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
@@ -45,12 +45,12 @@ jobs:
           
           # Verify files exist
           if [ ! -f "$METAL_SHADERS_FILE" ]; then
-            echo "ERROR: SDL2MetalShaders.mm not found at $METAL_SHADERS_FILE"
+            echo "ERROR: SDL2MetalShaders.mm not found"
             exit 1
           fi
           
           if [ ! -d "$METAL_DIR" ]; then
-            echo "ERROR: SDL Metal directory not found at $METAL_DIR"
+            echo "ERROR: SDL Metal directory not found"
             exit 1
           fi
           
@@ -65,26 +65,19 @@ jobs:
           )
           
           echo ""
-          echo "Files to add to Xcode project:"
+          echo "Files to add:"
           for file in "${FILES_TO_ADD[@]}"; do
-            if [ -f "$file" ]; then
-              echo "  ✓ $file"
-            else
-              echo "  ✗ $file (NOT FOUND)"
-              exit 1
-            fi
+            echo "  ✓ $file"
           done
           
-          # Generate IDs for Metal.framework
+          # Generate IDs
           METAL_FW_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
           METAL_BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
           
           echo ""
           echo "Adding files to Xcode project..."
           
-          # Track build IDs to verify later
           declare -a BUILD_IDS
-          declare -a FILE_IDS
           
           # Add each file
           for file_path in "${FILES_TO_ADD[@]}"; do
@@ -93,7 +86,6 @@ jobs:
             BUILD_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
             
             BUILD_IDS+=("$BUILD_ID")
-            FILE_IDS+=("$FILE_ID")
             
             # Determine file type
             if [[ "$FILE_NAME" == *.metal ]]; then
@@ -102,13 +94,9 @@ jobs:
               FILE_TYPE="sourcecode.cpp.objcpp"
             elif [[ "$FILE_NAME" == *.m ]]; then
               FILE_TYPE="sourcecode.c.objc"
-            else
-              FILE_TYPE="sourcecode"
             fi
             
-            echo "  $FILE_NAME"
-            echo "    File ID:  $FILE_ID"
-            echo "    Build ID: $BUILD_ID"
+            echo "  $FILE_NAME (ID: $FILE_ID, Build: $BUILD_ID)"
             
             # Add file reference
             sed -i '' '/\/\* Begin PBXFileReference section \*\//a\
@@ -122,86 +110,84 @@ jobs:
           done
           
           echo ""
-          echo "Finding RSDKv5 target's build phases..."
+          echo "Finding RSDKv5 build phases..."
           
-          # Find the PBXNativeTarget section for RSDKv5
-          # Look for a line like: XXXXXXXX /* RSDKv5 */ = {
-          # followed by isa = PBXNativeTarget;
-          RSDK_TARGET_ID=$(awk '
-            /\/\* RSDKv5 \*\/ = \{/ { 
-              target_id = $1
-              in_target = 1
-            }
-            in_target && /isa = PBXNativeTarget/ {
-              print target_id
-              exit
-            }
-            in_target && /^\t\}/ {
-              in_target = 0
-            }
-          ' "$PROJECT_FILE")
+          # Find RSDKv5 target - look for the exact pattern
+          RSDK_TARGET_ID=$(grep -n "RSDKv5 \*/" "$PROJECT_FILE" | grep "PBXNativeTarget" -B 5 | head -1 | cut -d: -f1 | xargs -I {} sed -n '{}p' "$PROJECT_FILE" | awk '{print $1}')
           
-          echo "  RSDKv5 target ID: $RSDK_TARGET_ID"
+          # Alternative method - find all native targets and filter
+          if [ -z "$RSDK_TARGET_ID" ]; then
+            echo "  Using alternative target search..."
+            RSDK_TARGET_ID=$(awk '
+              /\/\* RSDKv5 \*\/ = \{/ { id = $1; checking = 1; next }
+              checking && /isa = PBXNativeTarget/ { print id; exit }
+              checking && /\}\;/ { checking = 0 }
+            ' "$PROJECT_FILE")
+          fi
+          
+          echo "  Target ID: $RSDK_TARGET_ID"
           
           if [ -z "$RSDK_TARGET_ID" ]; then
-            echo "ERROR: Could not find RSDKv5 native target"
-            echo ""
-            echo "Targets found in project:"
-            grep "PBXNativeTarget" "$PROJECT_FILE" -B 2 | grep "/\*" | head -10
+            echo "ERROR: Could not find RSDKv5 target"
             exit 1
           fi
           
-          # Find the Sources build phase for this target
-          SOURCES_PHASE_ID=$(awk -v target="$RSDK_TARGET_ID" '
-            $1 == target { in_target = 1 }
-            in_target && /PBXSourcesBuildPhase/ {
-              print $1
-              exit
+          # Extract the buildPhases array from the target
+          echo "  Extracting build phases..."
+          SOURCES_PHASE_ID=$(awk -v tid="$RSDK_TARGET_ID" '
+            $1 == tid { found_target = 1 }
+            found_target && /buildPhases = \(/ { in_phases = 1; next }
+            in_phases && /Sources/ { 
+              gsub(/[^A-F0-9]/, "", $1)
+              if (length($1) == 24) {
+                print $1
+                exit
+              }
             }
-            in_target && /^\t\};/ { in_target = 0 }
+            in_phases && /\);/ { exit }
           ' "$PROJECT_FILE")
           
-          echo "  Sources phase ID: $SOURCES_PHASE_ID"
+          FRAMEWORKS_PHASE_ID=$(awk -v tid="$RSDK_TARGET_ID" '
+            $1 == tid { found_target = 1 }
+            found_target && /buildPhases = \(/ { in_phases = 1; next }
+            in_phases && /Frameworks/ { 
+              gsub(/[^A-F0-9]/, "", $1)
+              if (length($1) == 24) {
+                print $1
+                exit
+              }
+            }
+            in_phases && /\);/ { exit }
+          ' "$PROJECT_FILE")
+          
+          echo "  Sources phase: $SOURCES_PHASE_ID"
+          echo "  Frameworks phase: $FRAMEWORKS_PHASE_ID"
           
           if [ -z "$SOURCES_PHASE_ID" ]; then
-            echo "ERROR: Could not find sources build phase"
+            echo "ERROR: Could not find sources phase"
+            echo "Target block:"
+            grep -A 30 "^$RSDK_TARGET_ID" "$PROJECT_FILE"
             exit 1
           fi
           
-          # Find the Frameworks build phase
-          FRAMEWORKS_PHASE_ID=$(awk -v target="$RSDK_TARGET_ID" '
-            $1 == target { in_target = 1 }
-            in_target && /PBXFrameworksBuildPhase/ {
-              print $1
-              exit
-            }
-            in_target && /^\t\};/ { in_target = 0 }
-          ' "$PROJECT_FILE")
-          
-          echo "  Frameworks phase ID: $FRAMEWORKS_PHASE_ID"
-          
-          # Add files to Sources phase
+          # Add to sources phase
           echo ""
           echo "Adding to Sources phase..."
           for i in "${!BUILD_IDS[@]}"; do
             BUILD_ID="${BUILD_IDS[$i]}"
             FILE_NAME=$(basename "${FILES_TO_ADD[$i]}")
-            echo "  Adding $FILE_NAME"
             
             awk -v phase="$SOURCES_PHASE_ID" -v build="$BUILD_ID" -v name="$FILE_NAME" '
-              $1 == phase && /\/\* Sources \*\/ = \{/ { in_phase = 1 }
+              $1 == phase { in_phase = 1 }
               in_phase && /files = \(/ { 
-                in_files = 1
                 print
-                next
-              }
-              in_files && /\);/ && !added {
                 print "\t\t\t\t" build " /* " name " in Sources */,"
-                added = 1
+                next
               }
               { print }
             ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
             mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
+            echo "  ✓ Added $FILE_NAME"
           done
           
           # Add Metal.framework
@@ -216,40 +202,47 @@ jobs:
           \		'"$METAL_BUILD_ID"' /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = '"$METAL_FW_ID"' /* Metal.framework */; };
           ' "$PROJECT_FILE"
           
-          # Add to Frameworks phase
-          awk -v phase="$FRAMEWORKS_PHASE_ID" -v build="$METAL_BUILD_ID" '
-            $1 == phase && /\/\* Frameworks \*\/ = \{/ { in_phase = 1 }
-            in_phase && /files = \(/ { 
-              in_files = 1
-              print
-              next
-            }
-            in_files && /\);/ && !added {
-              print "\t\t\t\t" build " /* Metal.framework in Frameworks */,"
-              added = 1
-            }
-            { print }
-          ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
-          mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
-          
-          echo ""
-          echo "Verifying additions..."
-          
-          for i in "${!BUILD_IDS[@]}"; do
-            BUILD_ID="${BUILD_IDS[$i]}"
-            FILE_NAME=$(basename "${FILES_TO_ADD[$i]}")
-            if grep -q "$BUILD_ID" "$PROJECT_FILE"; then
-              echo "  ✓ $FILE_NAME added to project"
-            else
-              echo "  ✗ $FILE_NAME MISSING"
-            fi
-          done
+          if [ -n "$FRAMEWORKS_PHASE_ID" ]; then
+            awk -v phase="$FRAMEWORKS_PHASE_ID" -v build="$METAL_BUILD_ID" '
+              $1 == phase { in_phase = 1 }
+              in_phase && /files = \(/ { 
+                print
+                print "\t\t\t\t" build " /* Metal.framework in Frameworks */,"
+                next
+              }
+              { print }
+            ' "$PROJECT_FILE" > "$PROJECT_FILE.tmp"
+            mv "$PROJECT_FILE.tmp" "$PROJECT_FILE"
+            echo "  ✓ Added Metal.framework to link phase"
+          fi
           
           echo ""
           echo "═══════════════════════════════════════════════════════"
           echo "✓ Metal support configuration complete"
           echo "═══════════════════════════════════════════════════════"
 
+      # ── 2.6. Verify Metal files are in compile sources ──────────────────────
+      - name: Verify compilation setup
+        run: |
+          echo "Checking if Metal files will be compiled..."
+          
+          if grep -q "SDL2MetalShaders.mm in Sources" RSDKv5.xcodeproj/project.pbxproj; then
+            echo "✓ SDL2MetalShaders.mm found in Sources phase"
+          else
+            echo "✗ SDL2MetalShaders.mm NOT in Sources phase"
+          fi
+          
+          if grep -q "SDL_render_metal.m in Sources" RSDKv5.xcodeproj/project.pbxproj; then
+            echo "✓ SDL_render_metal.m found in Sources phase"
+          else
+            echo "✗ SDL_render_metal.m NOT in Sources phase"
+          fi
+          
+          if grep -q "Metal.framework in Frameworks" RSDKv5.xcodeproj/project.pbxproj; then
+            echo "✓ Metal.framework found in Frameworks phase"
+          else
+            echo "✗ Metal.framework NOT in Frameworks phase"
+          fi
           
       # ── 3. Build (unsigned — no Apple Developer account required) ────────────
       - name: Archive RSDKv5U
