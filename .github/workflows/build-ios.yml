@@ -29,13 +29,39 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
+           # ── 2.5. Patch Xcode project for Metal support ───────────────────────────
       - name: Add Metal framework and shaders to Xcode project
         run: |
           PROJECT_FILE="RSDKv5.xcodeproj/project.pbxproj"
           
           # Backup original
           cp "$PROJECT_FILE" "$PROJECT_FILE.backup"
+          
+          # Find the actual Metal shader file in SDL2
+          METAL_DIR="dependencies/all/SDL2/src/render/metal"
+          if [ -f "$METAL_DIR/SDL_shaders_metal.metal" ]; then
+            SHADER_FILE="SDL_shaders_metal.metal"
+            SHADER_PATH="$METAL_DIR/$SHADER_FILE"
+          elif [ -f "$METAL_DIR/SDL_render_metal.m" ]; then
+            SHADER_FILE="SDL_render_metal.m"
+            SHADER_PATH="$METAL_DIR/$SHADER_FILE"
+          else
+            echo "Searching for Metal files..."
+            find dependencies/all/SDL2/src/render/metal -type f
+            echo "ERROR: Cannot find Metal shader file"
+            exit 1
+          fi
+          
+          echo "Found Metal file: $SHADER_PATH"
+          
+          # Determine file type
+          if [[ "$SHADER_FILE" == *.metal ]]; then
+            FILE_TYPE="sourcecode.metal"
+          elif [[ "$SHADER_FILE" == *.m ]]; then
+            FILE_TYPE="sourcecode.c.objc"
+          else
+            FILE_TYPE="sourcecode.cpp.objcpp"
+          fi
           
           # Generate unique IDs for our additions
           SHADER_FILE_ID=$(openssl rand -hex 12 | tr '[:lower:]' '[:upper:]')
@@ -49,9 +75,9 @@ jobs:
           echo "  Metal framework: $METAL_FW_ID"
           echo "  Metal build:     $METAL_BUILD_ID"
           
-          # Add SDL2MetalShaders.mm file reference
+          # Add Metal shader file reference
           sed -i.tmp1 '/\/\* Begin PBXFileReference section \*\//a\
-          \		'"$SHADER_FILE_ID"' /* SDL2MetalShaders.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = SDL2MetalShaders.mm; path = dependencies/all/SDL2/src/render/metal/SDL_render_metal.m; sourceTree = SOURCE_ROOT; };
+          \		'"$SHADER_FILE_ID"' /* '"$SHADER_FILE"' */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = '"$FILE_TYPE"'; name = '"$SHADER_FILE"'; path = '"$SHADER_PATH"'; sourceTree = SOURCE_ROOT; };
           ' "$PROJECT_FILE"
           
           # Add Metal.framework file reference
@@ -61,7 +87,7 @@ jobs:
           
           # Add build file for shader
           sed -i.tmp3 '/\/\* Begin PBXBuildFile section \*\//a\
-          \		'"$SHADER_BUILD_ID"' /* SDL2MetalShaders.mm in Sources */ = {isa = PBXBuildFile; fileRef = '"$SHADER_FILE_ID"' /* SDL2MetalShaders.mm */; };
+          \		'"$SHADER_BUILD_ID"' /* '"$SHADER_FILE"' in Sources */ = {isa = PBXBuildFile; fileRef = '"$SHADER_FILE_ID"' /* '"$SHADER_FILE"' */; };
           ' "$PROJECT_FILE"
           
           # Add build file for Metal framework
@@ -70,12 +96,11 @@ jobs:
           ' "$PROJECT_FILE"
           
           # Add shader to compile sources (find PBXSourcesBuildPhase and add to files array)
-          # This finds the first occurrence and adds our file
-          awk -v shader_id="$SHADER_BUILD_ID" '
+          awk -v shader_id="$SHADER_BUILD_ID" -v shader_name="$SHADER_FILE" '
             /\/\* Begin PBXSourcesBuildPhase section \*\// { in_sources=1 }
             in_sources && /files = \(/ { in_files=1; print; next }
             in_files && !added && /\);/ { 
-              print "\t\t\t\t" shader_id " /* SDL2MetalShaders.mm in Sources */,"
+              print "\t\t\t\t" shader_id " /* " shader_name " in Sources */,"
               added=1
             }
             { print }
@@ -98,6 +123,8 @@ jobs:
           rm -f "$PROJECT_FILE".tmp*
           
           echo "✓ Metal support added to Xcode project"
+          echo "  File: $SHADER_FILE"
+          echo "  Type: $FILE_TYPE"
 
       # ── 3. Build (unsigned — no Apple Developer account required) ────────────
       - name: Archive RSDKv5U
