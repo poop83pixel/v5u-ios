@@ -29,7 +29,9 @@ typedef struct {
 // dimensions (512×256 or 1024×512); screenW/H are the logical pixel size.
 bool MetalShaders_Init(void *sdlRenderer,
                        float texW, float texH,
-                       float screenW, float screenH);
+                       float screenW, float screenH,
+                       int videoTexW, int videoTexH,
+                       int isRev02);
 
 // Update the vertex UV extents after a screen resize.
 void MetalShaders_UpdateVertexBuffer(float screenW, float screenH,

@@ -1,3 +1,4 @@
+
 #if TARGET_OS_IPHONE
 #include "SDL2MetalShaders.h"
 #endif
@@ -633,7 +634,9 @@ bool RenderDevice::InitGraphicsAPI()
         videoSettings.shaderSupport = MetalShaders_Init(
             renderer,
             textureSize.x, textureSize.y,
-            pixelSize.x,   pixelSize.y);
+            pixelSize.x,   pixelSize.y,
+            RETRO_VIDEO_TEXTURE_W, RETRO_VIDEO_TEXTURE_H,
+            RETRO_REV02);
         if (videoSettings.shaderSupport)
             MetalShaders_UpdateVertexBuffer(pixelSize.x, pixelSize.y,
                                             textureSize.x, textureSize.y);

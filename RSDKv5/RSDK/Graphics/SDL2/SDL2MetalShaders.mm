@@ -25,10 +25,11 @@ struct MetalVertex {
     float    tex[2];
 };
 
-// NDC vertex buffer — mirrors GLFWRenderDevice::rsdkGLVertexBuffer.
-// UV.x/y == 0 or 1 are placeholders; MetalShaders_UpdateVertexBuffer
-// replaces them with the actual texel-space fractions.
-#if RETRO_REV02
+// Runtime vertex count — set by MetalShaders_Init from the isRev02 flag.
+static int s_vertexCount = 24;
+
+// NDC vertex buffer — 60 entries covers both Rev01 (24 used) and Rev02 (60 used).
+// UV.x/y == 0 or 1 are placeholders replaced by MetalShaders_UpdateVertexBuffer.
 static MetalVertex s_baseVerts[60] = {
     // 1 Screen (0)
     { { +1.f, -1.f, 1.f }, 0xFFFFFFFF, { 1.f, 1.f } },
@@ -110,8 +111,12 @@ static MetalVertex s_baseVerts[60] = {
     { { -1.f, -1.f, 1.f }, 0xFFFFFFFF, { 0.f, 1.f } },
     { { -1.f, +1.f, 1.f }, 0xFFFFFFFF, { 0.f, 0.f } },
 };
-static const int kVertexCount = 60;
-#else
+// 60-entry table — runtime s_vertexCount selects 24 or 60.
+// The 24-entry (non-Rev02) verts below fill indices 0-23; they are
+// identical in layout so we embed them as a second initialiser block
+// that is never actually used at runtime — we rely on s_vertexCount.
+// Remove the duplicate block:
+#if 0 // non-Rev02 block (replaced by s_vertexCount runtime flag)
 static MetalVertex s_baseVerts[24] = {
     // 1 Screen (0)
     { { +1.f, -1.f, 1.f }, 0xFFFFFFFF, { 1.f, 1.f } },
@@ -145,8 +150,7 @@ static MetalVertex s_baseVerts[24] = {
     { { -1.f, -1.f, 1.f }, 0xFFFFFFFF, { 0.f, 1.f } },
     { { -1.f, +1.f, 1.f }, 0xFFFFFFFF, { 0.f, 0.f } },
 };
-static const int kVertexCount = 24;
-#endif
+#endif // end non-Rev02 block
 
 // ---------------------------------------------------------------------------
 // Uniform block (matches the layout expected by every fragment shader)
@@ -253,8 +257,13 @@ static id<MTLRenderPipelineState> CompilePipeline(const char *name,
 
 bool MetalShaders_Init(void *sdlRenderer,
                        float texW, float texH,
-                       float screenW, float screenH)
+                       float screenW, float screenH,
+                       int videoTexW, int videoTexH,
+                       int isRev02)
 {
+    // Set runtime vertex count from isRev02 flag
+    s_vertexCount = isRev02 ? 60 : 24;
+
     // Grab the Metal device from SDL's renderer
     CAMetalLayer *layer = (__bridge CAMetalLayer *)SDL_RenderGetMetalLayer((SDL_Renderer *)sdlRenderer);
     if (!layer) return false;
@@ -274,13 +283,13 @@ bool MetalShaders_Init(void *sdlRenderer,
     s_vertexDesc.layouts[0].stride         = sizeof(MetalVertex);
 
     // ── Vertex buffer (contents updated by UpdateVertexBuffer) ───────────────
-    MetalVertex verts[kVertexCount];
+    MetalVertex verts[60]; // fixed max; s_vertexCount selects how many are used
     memcpy(verts, s_baseVerts, sizeof(verts));
 
     float uMax = screenW / texW;
     float vMax = screenH / texH;
     // Patch UV in the non-image-quad vertices
-    int gameVerts = kVertexCount - 6;
+    int gameVerts = s_vertexCount - 6;
     for (int i = 0; i < gameVerts; ++i) {
         if (verts[i].tex[0] != 0.f) verts[i].tex[0] = uMax;
         if (verts[i].tex[1] != 0.f) verts[i].tex[1] = vMax;
@@ -306,8 +315,8 @@ bool MetalShaders_Init(void *sdlRenderer,
     // ── Image/video texture (BGRA8) ──────────────────────────────────────────
     MTLTextureDescriptor *imgDesc =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                                          width:RETRO_VIDEO_TEXTURE_W
-                                                         height:RETRO_VIDEO_TEXTURE_H
+                                                          width:(NSUInteger)videoTexW
+                                                         height:(NSUInteger)videoTexH
                                                       mipmapped:NO];
     imgDesc.usage       = MTLTextureUsageShaderRead;
     imgDesc.storageMode = MTLStorageModeShared;
@@ -339,9 +348,9 @@ void MetalShaders_UpdateVertexBuffer(float screenW, float screenH,
     float uMax = screenW / texW;
     float vMax = screenH / texH;
 
-    memcpy(verts, s_baseVerts, sizeof(MetalVertex) * kVertexCount);
+    memcpy(verts, s_baseVerts, sizeof(MetalVertex) * s_vertexCount);
 
-    int gameVerts = kVertexCount - 6;
+    int gameVerts = s_vertexCount - 6;
     for (int i = 0; i < gameVerts; ++i) {
         if (verts[i].tex[0] != 0.f) verts[i].tex[0] = uMax;
         if (verts[i].tex[1] != 0.f) verts[i].tex[1] = vMax;
