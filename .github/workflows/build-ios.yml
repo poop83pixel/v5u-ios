@@ -44,7 +44,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
-            2>&1 | head -200
+            | xcpretty || true 
 
       # ── 4. Package as IPA ────────────────────────────────────────────────────
       # Because the build is unsigned we skip xcodebuild -exportArchive and
