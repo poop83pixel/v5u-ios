@@ -44,8 +44,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            DEVELOPMENT_TEAM="" \
-            | xcpretty --color --report html --output build-report.html
+            DEVELOPMENT_TEAM=""
 
       - name: Upload build report on failure
         if: failure()
