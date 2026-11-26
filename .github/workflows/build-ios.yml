@@ -12,7 +12,7 @@ on:
 jobs:
   v5u-ios:
     name: Build RSDKv5U for iOS
-    runs-on: macos-14  # Apple Silicon — fastest Xcode builds on GH Actions
+    runs-on: macos-15  # Apple Silicon — fastest Xcode builds on GH Actions
 
     steps:
       # ── 1. Source ────────────────────────────────────────────────────────────
